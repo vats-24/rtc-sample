@@ -1,4 +1,4 @@
-import { Producer, Router, Transport } from "mediasoup/node/lib/types";
+import type { Producer, Router, Transport } from "mediasoup/node/lib/types";
 
 interface Peer {
   id: string;
