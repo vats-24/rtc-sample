@@ -28,24 +28,26 @@ export async function initializeMediaSoup() {
 }
 
 export async function createWebRtcTransport() {
-  const transport = await worker.createWebRtcServer({
-    listenInfos: [
+  const transport = await router.createWebRtcTransport({
+    listenIps: [
       {
-        protocol: "udp",
         ip: "0.0.0.0",
-        announcedAddress: "127.0.0.1",
-        portRange: mediaSoupConfig.worker.portRange,
-      },
-      {
-        protocol: "tcp",
-        ip: "0.0.0.0",
-        announcedAddress: "127.0.0.1",
-        portRange: mediaSoupConfig.worker.portRange,
+        announcedIp: "127.0.0.1",
       },
     ],
+    enableUdp: true,
+    enableTcp: true,
+    preferUdp: true,
+    initialAvailableOutgoingBitrate: 1000000,
   });
 
   return {
     transport,
+    params: {
+      id: transport.id,
+      iceParameters: transport.iceParameters,
+      iceCandidates: transport.iceCandidates,
+      dtlsParameters: transport.dtlsParameters,
+    },
   };
 }
