@@ -16,7 +16,7 @@ export class Room {
     this.router = router;
   }
 
-  addPeer(peerId: string, name: string): Peer {
+  addPeer(peerId: string, name?: string): Peer {
     if (this.peers.has(peerId)) {
       throw new Error(`Peer with id ${peerId} already exists`);
     }

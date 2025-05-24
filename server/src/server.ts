@@ -1,7 +1,7 @@
 import express from "express";
 import http from "http";
 import { Server, Socket } from "socket.io";
-import { initializeMediaSoup } from "./mediasoup";
+import { createWebRtcTransport, initializeMediaSoup } from "./mediasoup";
 import { initializeHLsServer } from "./hls";
 import { Room } from "./mediasoup/room";
 const app = express();
@@ -29,6 +29,37 @@ io.attachApp(app);
 
   io.on("connection", (socket: Socket) => {
     console.log("Client connected:", socket.id);
+
+    socket.on("createTransport", () => {
+      try {
+        room.addPeer(socket.id);
+      } catch (error) {
+        console.error("Error adding peer to room:", error);
+      }
+
+      socket.on("createWebRtcTransport", async (callback) => {
+        try {
+          const { transport, params } = await createWebRtcTransport();
+
+          room.addTransport(socket.id, transport);
+
+          transport.on("dtlsstatechange", (dtlsState) => {
+            if (dtlsState == "closed") {
+              transport.close();
+            }
+          });
+
+          transport.on("@close", () => {
+            console.log("Transport closed");
+          });
+
+          callback({ params });
+        } catch (error) {
+          console.error("Error creating WebRTC transport:", error);
+          callback({ error: error.message });
+        }
+      });
+    });
   });
 })();
 
@@ -44,14 +75,6 @@ io.attachApp(app);
 
 // s- connect transport to peer
 // s- prduce media params transportId, kind rtpParameters
-
-io.on("connection", (socket: Socket) => {
-  console.log("Socket connected");
-
-  //Add peer to the room
-
-  //handle transport creation request
-});
 
 app.get("/", (req, res) => {
   res.send("Hello world!");
