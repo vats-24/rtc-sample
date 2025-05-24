@@ -30,36 +30,54 @@ io.attachApp(app);
   io.on("connection", (socket: Socket) => {
     console.log("Client connected:", socket.id);
 
-    socket.on("createTransport", () => {
+    try {
+      room.addPeer(socket.id);
+    } catch (error) {
+      console.error("Error adding peer to room:", error);
+    }
+
+    socket.on("createWebRtcTransport", async (callback) => {
       try {
-        room.addPeer(socket.id);
+        const { transport, params } = await createWebRtcTransport();
+
+        room.addTransport(socket.id, transport);
+
+        transport.on("dtlsstatechange", (dtlsState) => {
+          if (dtlsState == "closed") {
+            transport.close();
+          }
+        });
+
+        transport.on("@close", () => {
+          console.log("Transport closed");
+        });
+
+        callback({ params });
       } catch (error) {
-        console.error("Error adding peer to room:", error);
+        console.error("Error creating WebRTC transport:", error);
+        callback({ error: error?.message });
       }
+    });
 
-      socket.on("createWebRtcTransport", async (callback) => {
+    socket.on(
+      "connectTransport",
+      async ({ transportId, dtlsParameters }, callback) => {
         try {
-          const { transport, params } = await createWebRtcTransport();
+          const peer = room.getPeer(socket.id);
+          const transport = peer.transport.get(transportId);
 
-          room.addTransport(socket.id, transport);
+          if (!transport) {
+            throw new Error(`Transport with ID ${transportId} not found`);
+          }
 
-          transport.on("dtlsstatechange", (dtlsState) => {
-            if (dtlsState == "closed") {
-              transport.close();
-            }
-          });
-
-          transport.on("@close", () => {
-            console.log("Transport closed");
-          });
-
-          callback({ params });
-        } catch (error) {
-          console.error("Error creating WebRTC transport:", error);
+          await transport.connect({ dtlsParameters });
+          callback({ success: true });
+        } catch (error: any) {
+          console.error("Error connecting transport:", error);
           callback({ error: error.message });
         }
-      });
-    });
+      }
+    );
   });
 })();
 
