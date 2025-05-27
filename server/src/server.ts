@@ -78,6 +78,52 @@ io.attachApp(app);
         }
       }
     );
+
+    socket.on(
+      "produce",
+      async ({ transportId, kind, rtpParameters }, callback) => {
+        try {
+          const peer = room.getPeer(socket.id);
+          const transport = peer.transport.get(transportId);
+
+          if (!transport) {
+            throw new Error(`Transport with ID ${transportId} not found`);
+          }
+
+          const producer = await transport.produce({ kind, rtpParameters });
+
+          room.addProducer(socket.id, producer);
+
+          socket.broadcast.emit("newProducer", {
+            producerId: producer.id,
+            producerPeerId: socket.id,
+            kind,
+          });
+
+          callback({ id: producer.id });
+        } catch (error: any) {
+          console.error("Error producing:", error);
+          callback({ error: error.message });
+        }
+      }
+    );
+
+    socket.on("disconnect", () => {
+      console.log("Client disconnected:", socket.id);
+
+      try {
+        room.removePeer(socket.id);
+
+        socket.broadcast.emit("peerDisconnected", { peerId: socket.id });
+      } catch (error) {
+        console.error("Error removing peer from room:", error);
+      }
+    });
+  });
+
+  const PORT = process.env.PORT || 3000;
+  server.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
   });
 })();
 
