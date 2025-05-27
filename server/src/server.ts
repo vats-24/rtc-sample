@@ -53,7 +53,7 @@ io.attachApp(app);
         });
 
         callback({ params });
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error creating WebRTC transport:", error);
         callback({ error: error?.message });
       }
@@ -126,24 +126,3 @@ io.attachApp(app);
     console.log(`Server listening on port ${PORT}`);
   });
 })();
-
-//build iife
-//
-// initialize mediasoup
-//initialize HLS server
-// socket io connection handling
-// s- Add the peer to the room
-// st- handle transport creation request
-// st- save transport
-// st- listen to transport events
-
-// s- connect transport to peer
-// s- prduce media params transportId, kind rtpParameters
-
-app.get("/", (req, res) => {
-  res.send("Hello world!");
-});
-
-app.listen(3000, () => {
-  console.log("Server started");
-});
