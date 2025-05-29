@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import NodeMediaServer from "node-media-server";
 import { hlsConfig } from "../config";
-import { spawn } from "child_process";
+import { ChildProcess, spawn } from "child_process";
 
 const media = path.join(process.cwd(), "media");
 if (!fs.existsSync(media)) {
@@ -14,8 +14,10 @@ export function initializeHLsServer() {
 
   nms.run();
 
+  console.log("Brio");
+
   nms.on("prePublish", (id, StreamPath, args) => {
-    console.log("[NodeMediaServer] Stream Started", StreamPath);
+    // console.log("[NodeMediaServer] Stream Started", StreamPath);
 
     const streamKey = StreamPath.split("/")[2];
     const hlsOutputPath = path.join(media, streamKey);

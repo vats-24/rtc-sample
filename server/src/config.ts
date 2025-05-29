@@ -40,6 +40,7 @@ export const mediaSoupConfig = {
 };
 
 export const hlsConfig = {
+  bind: "localhost",
   rtmp: {
     port: 1935,
     chunk_size: 60000,

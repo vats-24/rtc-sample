@@ -19,8 +19,6 @@ const io = new Server(server, {
 
 app.use("/stream", express.static("./media"));
 
-io.attachApp(app);
-
 (async () => {
   const { router } = await initializeMediaSoup();
   const room = new Room(router);

@@ -27,8 +27,8 @@ export class WebRTCService {
 
       this.socket.on("connect", async () => {
         console.log("Connected to signalling server");
-        try {
-        } catch (error) {}
+        // try {
+        // } catch (error) {}
       });
 
       this.socket.on("disconnect", () => {
@@ -47,7 +47,7 @@ export class WebRTCService {
   private async _initializeMediasoupDevice() {
     if (!this.socket) throw new Error("Socket not connected");
 
-    return new Promise((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       this.socket!.emit(
         "getRouterRtpCapabilities",
         (
@@ -93,6 +93,32 @@ export class WebRTCService {
     });
   }
 
+  private _setupSocketEventListeners(): void {
+    if (!this.socket) return;
+
+    this.socket.on(
+      "newProducer",
+      (data: {
+        producerId: string;
+        producerPeerId: string;
+        kind: "audio" | "video";
+      }) => {
+        const { producerId, producerPeerId, kind } = data;
+
+        if (producerId === this.socket?.id) {
+          console.log("Ignoring producer event from self");
+          return;
+        }
+        console.log(
+          "New producer available:",
+          producerId,
+          producerPeerId,
+          kind
+        );
+      }
+    );
+  }
+
   async getUserMedia() {
     try {
       this.localStream = await navigator.mediaDevices.getUserMedia({
@@ -102,5 +128,36 @@ export class WebRTCService {
       console.error("Error getting user media:", error);
       throw error;
     }
+  }
+
+  close(): void {
+    console.log("Closing WebRTC service");
+    if (this.localStream) {
+      this.localStream.getTracks().forEach((track) => track.stop());
+      this.localStream = null;
+    }
+
+    this.producers.forEach((p) => p.close());
+    this.producers.clear();
+
+    this.consumers.forEach((c) => c.close());
+    this.consumers.clear();
+
+    if (this.sendTransport) {
+      this.sendTransport.close();
+      this.sendTransport = null;
+    }
+    if (this.recvTransport) {
+      this.recvTransport.close();
+      this.recvTransport = null;
+    }
+
+    this.device = null;
+
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
+    }
+    console.log("WebRTC service closed");
   }
 }
