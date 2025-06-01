@@ -5,7 +5,6 @@ let worker: mediaSoup.types.Worker;
 let router: mediaSoup.types.Router;
 
 export async function initializeMediaSoup() {
-  console.log("config", mediaSoup);
   worker = await mediaSoup.createWorker({
     logLevel: mediaSoupConfig.worker.logLevel as mediaSoup.types.WorkerLogLevel,
     logTags: mediaSoupConfig.worker.logTags as mediaSoup.types.WorkerLogTag[],
@@ -15,7 +14,7 @@ export async function initializeMediaSoup() {
 
   worker.on("died", () => {
     console.log("Mediasoup worker died");
-    setTimeout(() => process.exit(1), 1000);
+    setTimeout(() => process.exit(1), 2000);
   });
 
   router = await worker.createRouter({

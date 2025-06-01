@@ -58,6 +58,11 @@ export class Room {
     peer?.producers.set(producer.id, producer);
   }
 
+  addConsumer(peerId: string, consumer: Consumer): void {
+    const peer = this.getPeer(peerId);
+    peer?.consumers.set(consumer.id, consumer);
+  }
+
   removePeer(peerId: string) {
     const peer = this.peers.get(peerId);
 

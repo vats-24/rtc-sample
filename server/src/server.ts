@@ -106,6 +106,27 @@ app.use("/stream", express.static("./media"));
       }
     );
 
+    socket.on(
+      "consume",
+      async ({ transportId, producerId, rtpCapabilities }, callback) => {
+        try {
+          const peer = room.getPeer(socket.id);
+          const transport = peer.transport.get(transportId);
+
+          if (!transport) {
+            throw new Error(`Transport with ID ${transportId} not found`);
+          }
+
+          const consumer = await transport.consume({
+            producerId,
+            rtpCapabilities,
+          });
+
+          callback({ id: consumer.id });
+        } catch (error) {}
+      }
+    );
+
     socket.on("disconnect", () => {
       console.log("Client disconnected:", socket.id);
 
