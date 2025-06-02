@@ -11,8 +11,9 @@ return this.localStream
 
 import { io, Socket } from "socket.io-client";
 import * as mediasoupClient from "mediasoup-client";
+import { Children } from "react";
 
-export class WebRTCService {
+class WebRTCService {
   socket: Socket | null = null;
   device: mediasoupClient.types.Device | null = null;
   sendTransport: mediasoupClient.types.Transport | null = null;
@@ -27,8 +28,15 @@ export class WebRTCService {
 
       this.socket.on("connect", async () => {
         console.log("Connected to signalling server");
-        // try {
-        // } catch (error) {}
+        try {
+          await this._initializeMediasoupDevice();
+          await this._setupSocketEventListeners();
+          resolve();
+        } catch (error) {
+          console.error("Initialization error:", error);
+          this.close();
+          reject(error);
+        }
       });
 
       this.socket.on("disconnect", () => {
@@ -70,7 +78,7 @@ export class WebRTCService {
 
           console.log(
             "Received router RTP capabilities:",
-            routerRtpCapabilities
+            routerRtpCapabilities.routerRtpCapabilities
           );
 
           try {
@@ -98,7 +106,7 @@ export class WebRTCService {
 
     this.socket.on(
       "newProducer",
-      (data: {
+      async (data: {
         producerId: string;
         producerPeerId: string;
         kind: "audio" | "video";
@@ -110,11 +118,12 @@ export class WebRTCService {
           return;
         }
         console.log(
-          "New producer available:",
+          "New producer available: ID",
           producerId,
           producerPeerId,
           kind
         );
+        await this.subscribeToProducer(producerId, producerPeerId, kind);
       }
     );
 
@@ -133,52 +142,58 @@ export class WebRTCService {
             return reject(new Error(response.error));
           }
 
-          this.sendTransport = this.device!.createSendTransport(
-            response?.params
-          );
+          try {
+            this.sendTransport = this.device!.createSendTransport(
+              response?.params
+            );
 
-          this.sendTransport.on(
-            "connect",
-            async ({ dtlsParameters }, callback, errCallback) => {
-              try {
-                this.socket!.emit(
-                  "connectTransport",
-                  {
-                    transportId: this.sendTransport!.id,
-                    dtlsParameters,
-                  },
-                  () => {
-                    callback();
-                  }
-                );
-              } catch (error: any) {
-                errCallback(error);
+            this.sendTransport.on(
+              "connect",
+              async ({ dtlsParameters }, callback, errCallback) => {
+                try {
+                  this.socket!.emit(
+                    "connectTransport",
+                    {
+                      transportId: this.sendTransport!.id,
+                      dtlsParameters,
+                    },
+                    (res: { success?: boolean; error?: string }) => {
+                      callback();
+                    }
+                  );
+                } catch (error: any) {
+                  errCallback(error);
+                }
               }
-            }
-          );
+            );
 
-          this.sendTransport.on(
-            "produce",
-            async (params, callback, errCallback) => {
-              try {
-                this.socket!.emit(
-                  "produce",
-                  {
-                    transportId: this.sendTransport!.id,
-                    kind: params.kind,
-                    rtpParameters: params.rtpParameters,
-                  },
-                  (res: { id?: string; error?: string }) => {
-                    callback({
-                      id: res.id,
-                    });
-                  }
-                );
-              } catch (error) {
-                errCallback(error);
+            this.sendTransport.on(
+              "produce",
+              async (params, callback, errCallback) => {
+                try {
+                  this.socket!.emit(
+                    "produce",
+                    {
+                      transportId: this.sendTransport!.id,
+                      kind: params.kind,
+                      rtpParameters: params.rtpParameters,
+                    },
+                    (res: { id?: string; error?: string }) => {
+                      callback({
+                        id: res.id,
+                      });
+                    }
+                  );
+                } catch (error) {
+                  errCallback(error);
+                }
               }
-            }
-          );
+            );
+
+            resolve(this.sendTransport);
+          } catch (error) {
+            console.log(error);
+          }
         }
       );
     });
@@ -188,9 +203,15 @@ export class WebRTCService {
     if (!this.sendTransport) await this.createSendTransport();
     if (!this.sendTransport) throw new Error("Send transport not found");
 
+    const currentAppData = {
+      ...appData,
+      trackId: track.id,
+      peerId: this.socket?.id,
+    };
+
     const producer = await this.sendTransport.produce({
       track,
-      ...appData,
+      appData: currentAppData,
     });
 
     this.producers.set(producer.id, producer);
@@ -211,26 +232,35 @@ export class WebRTCService {
   async publishLocalStream() {
     if (!this.localStream) await this.getLocalStream();
     if (!this.localStream) throw new Error("Local stream not found");
-
     for (const track of this.localStream.getTracks()) {
-      await this.publishTrack(track, { kind: track.kind });
+      try {
+        await this.publishTrack(track, { kind: track.kind });
+        console.log(`Successfully published ${track.kind} track`);
+      } catch (error) {
+        console.error(`Failed to publish ${track.kind} track:`, error);
+      }
     }
   }
 
   async createRecvTransport() {
+    console.log("first");
     return new Promise((resolve, reject) => {
       this.socket!.emit(
-        "connectWebRtcTransport",
+        "createWebRtcTransport",
         (response: { params?: any; error?: string }) => {
           if (response.error) {
             console.error("Error creating WebRTC transport:", response.error);
             return reject(new Error(response.error));
           }
 
+          console.log(response);
+
           try {
             this.recvTransport = this.device!.createRecvTransport(
               response.params
             );
+
+            console.log(this.recvTransport);
 
             this.recvTransport.on(
               "connect",
@@ -249,29 +279,82 @@ export class WebRTCService {
             );
 
             resolve(this.recvTransport);
-          } catch (error) {}
+          } catch (error) {
+            reject(error);
+          }
         }
       );
     });
   }
 
-  //close a specific consumer
+  //look in for appData here neither sent nor received
+  async subscribeToProducer(
+    producerId: string,
+    producerPeerId: string,
+    kind: "audio" | "video"
+  ) {
+    if (!this.socket || !this.device) throw new Error("Pre requisite not met");
+    if (!this.recvTransport) await this.createRecvTransport();
+    if (!this.recvTransport) throw new Error("Recv transport not found");
+
+    const appData = { producerId, peerId: producerPeerId, kind };
+
+    return new Promise((resolve, reject) => {
+      this.socket!.emit(
+        "consume",
+        {
+          transportId: this.recvTransport?.id,
+          producerId,
+          rtpCapabilities: this.device?.rtpCapabilities,
+          appData,
+        },
+        async (res: { params?: any; error?: string }) => {
+          if (res.error) return reject(new Error(res.error));
+
+          try {
+            const consumer = await this.recvTransport!.consume({
+              id: res.params.id,
+              producerId: res.params.producerId,
+              kind: res.params.kind,
+              rtpParameters: res.params.rtpParameters,
+            });
+
+            this.consumers.set(consumer.id, consumer);
+            console.log(
+              `Consuming ${kind} - Consumer ID: ${consumer.id}, Producer ID: ${producerId}, AppData:`,
+              consumer.appData
+            );
+
+            consumer?.on("transportclose", () => {
+              console.log(`Consumer ${consumer.id} transport closed.`);
+              this.consumers.delete(consumer.id);
+            });
+            const { track } = consumer.track;
+            const remoteStream = new MediaStream([track]);
+            resolve(consumer);
+          } catch (error) {
+            console.error(
+              `Error consuming producer ${producerId} (client-side):`,
+              error
+            );
+            reject(error);
+          }
+        }
+      );
+    });
+  }
 
   async getLocalStream() {
     try {
       this.localStream = await navigator.mediaDevices.getUserMedia({
         audio: true,
         video: {
-          width: {
-            min: 640,
-            max: 1920,
-          },
-          height: {
-            min: 400,
-            max: 1080,
-          },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
         },
       });
+
+      return this.localStream;
     } catch (error) {
       console.error("Error getting user media:", error);
       throw error;
@@ -309,3 +392,5 @@ export class WebRTCService {
     console.log("WebRTC service closed");
   }
 }
+
+export default new WebRTCService();

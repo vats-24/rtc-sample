@@ -1,14 +1,14 @@
 import { useEffect } from "react";
 import "./App.css";
 import { WebRTCService } from "./services/webrtcService";
+import { Stream } from "./components/StreamView";
 
 function App() {
-  const webrtcService = new WebRTCService();
-  useEffect(() => {
-    console.log("first");
-    webrtcService.connect();
-  });
-  return <></>;
+  return (
+    <>
+      <Stream />
+    </>
+  );
 }
 
 export default App;

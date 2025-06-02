@@ -34,6 +34,16 @@ app.use("/stream", express.static("./media"));
       console.error("Error adding peer to room:", error);
     }
 
+    socket.on("getRouterRtpCapabilities", async (callback) => {
+      try {
+        const routerRtpCapabilities = router.rtpCapabilities;
+        callback(routerRtpCapabilities);
+      } catch (error) {
+        console.error("Error getting router RTP capabilities:", error);
+        callback(error);
+      }
+    });
+
     socket.on("createWebRtcTransport", async (callback) => {
       try {
         const { transport, params } = await createWebRtcTransport();
@@ -129,7 +139,7 @@ app.use("/stream", express.static("./media"));
               id: consumer.id,
               producerId: consumer.producerId,
               kind: consumer.kind,
-              rtpCapabilities: consumer.rtpParameters,
+              rtpParameters: consumer.rtpParameters,
             },
           });
         } catch (error) {}
