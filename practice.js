@@ -177,7 +177,6 @@ class WebRTCService {
         
         try {
           this.sendTransport = this.device!.createSendTransport(response.params);
-          console.log('Send transport created (client-side):', this.sendTransport.id);
 
           // Event: 'connect' - Fired when transport needs to connect to Mediasoup router
           this.sendTransport.on('connect', ({ dtlsParameters }, callback, errback) => {

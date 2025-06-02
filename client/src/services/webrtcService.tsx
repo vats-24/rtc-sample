@@ -11,7 +11,6 @@ return this.localStream
 
 import { io, Socket } from "socket.io-client";
 import * as mediasoupClient from "mediasoup-client";
-import { Children } from "react";
 
 class WebRTCService {
   socket: Socket | null = null;
@@ -21,6 +20,15 @@ class WebRTCService {
   producers = new Map<string, mediasoupClient.types.Producer>();
   consumers = new Map<string, mediasoupClient.types.Consumer>();
   localStream: MediaStream | null = null;
+
+  public onRemoteTrack:
+    | ((
+        track: MediaStreamTrack,
+        stream: MediaStream,
+        peerId: string,
+        kind: "audio" | "video"
+      ) => void)
+    | null = null;
 
   async connect(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
@@ -329,8 +337,10 @@ class WebRTCService {
               console.log(`Consumer ${consumer.id} transport closed.`);
               this.consumers.delete(consumer.id);
             });
-            const { track } = consumer.track;
-            const remoteStream = new MediaStream([track]);
+            const { track } = consumer;
+            const remoteStream = new MediaStream([track]); // Create a stream for this track
+            this.onRemoteTrack?.(track, remoteStream, producerPeerId, kind);
+
             resolve(consumer);
           } catch (error) {
             console.error(

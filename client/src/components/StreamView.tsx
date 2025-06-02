@@ -8,6 +8,8 @@ export const Stream = () => {
   const [cameraOn, setCameraOn] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
 
+  const remoteStreams = useRef<Map<string, MediaStream>>(new Map());
+
   useEffect(() => {
     const connect = async () => {
       try {
@@ -19,6 +21,21 @@ export const Stream = () => {
     };
 
     connect();
+
+    webrtcService.onRemoteTrack = (track, stream, peerId, kind) => {
+      let remoteStream = remoteStreams.current.get(peerId);
+
+      if (!remoteStream) {
+        remoteStream = new MediaStream();
+        remoteStreams.current.set(peerId, remoteStream);
+
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = remoteStream;
+        }
+      }
+
+      remoteStream.addTrack(track);
+    };
 
     return () => {
       WebRTCService.close();
@@ -33,24 +50,21 @@ export const Stream = () => {
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
       }
-
-      const producedStreamToServer = await WebRTCService.publishLocalStream(); // const stream = localVideoRef.current?.play()
-      console.log(WebRTCService.consumers);
     }
   };
 
   const watchUserMedia = async () => {
-    if (cameraOn) {
-      setCameraOn(false);
-    } else {
-    }
+    WebRTCService.onRemoteTrack = (track, stream, peerId, kind) => {
+      console.log(stream);
+      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = stream;
+    };
   };
   return (
     <div className="flex flex-col items-center gap-3 justify-center h-screen bg-white">
       <h1 className="text-3xl font-bold">Stream</h1>
       <div className="flex flex-row gap-2">
         <video ref={localVideoRef} autoPlay className="bg-amber-300"></video>
-        <video ref={remoteVideoRef} className="bg-amber-200"></video>
+        <video ref={remoteVideoRef} autoPlay className="bg-amber-200"></video>
       </div>
       <button
         onClick={() => togglePlay()}
@@ -58,6 +72,12 @@ export const Stream = () => {
       >
         Play
       </button>
+      {/* <button
+        onClick={() => watchUserMedia()}
+        className="bg-blue-700 p-2 px-3 rounded-md"
+      >
+        Watch Peer
+      </button> */}
     </div>
   );
 };
