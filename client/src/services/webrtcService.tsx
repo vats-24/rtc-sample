@@ -117,9 +117,147 @@ export class WebRTCService {
         );
       }
     );
+
+    //peer-disconnected
+
+    //consumer-closed
   }
 
-  async getUserMedia() {
+  async createSendTransport() {
+    return new Promise((resolve, reject) => {
+      this.socket?.emit(
+        "createWebRtcTransport",
+        (response: { params?: any; error?: string }) => {
+          if (response.error) {
+            console.error("Error creating WebRTC transport:", response.error);
+            return reject(new Error(response.error));
+          }
+
+          this.sendTransport = this.device!.createSendTransport(
+            response?.params
+          );
+
+          this.sendTransport.on(
+            "connect",
+            async ({ dtlsParameters }, callback, errCallback) => {
+              try {
+                this.socket!.emit(
+                  "connectTransport",
+                  {
+                    transportId: this.sendTransport!.id,
+                    dtlsParameters,
+                  },
+                  () => {
+                    callback();
+                  }
+                );
+              } catch (error: any) {
+                errCallback(error);
+              }
+            }
+          );
+
+          this.sendTransport.on(
+            "produce",
+            async (params, callback, errCallback) => {
+              try {
+                this.socket!.emit(
+                  "produce",
+                  {
+                    transportId: this.sendTransport!.id,
+                    kind: params.kind,
+                    rtpParameters: params.rtpParameters,
+                  },
+                  (res: { id?: string; error?: string }) => {
+                    callback({
+                      id: res.id,
+                    });
+                  }
+                );
+              } catch (error) {
+                errCallback(error);
+              }
+            }
+          );
+        }
+      );
+    });
+  }
+
+  async publishTrack(track: MediaStreamTrack, appData: any = {}) {
+    if (!this.sendTransport) await this.createSendTransport();
+    if (!this.sendTransport) throw new Error("Send transport not found");
+
+    const producer = await this.sendTransport.produce({
+      track,
+      ...appData,
+    });
+
+    this.producers.set(producer.id, producer);
+
+    producer.on("transportclose", () => {
+      console.log(`Producer ${producer.id} transport closed.`);
+      this.producers.delete(producer.id);
+    });
+
+    producer.on("trackended", () => {
+      console.log(`Producer ${producer.id} track ended.`);
+      this.producers.delete(producer.id);
+    });
+
+    return producer;
+  }
+
+  async publishLocalStream() {
+    if (!this.localStream) await this.getLocalStream();
+    if (!this.localStream) throw new Error("Local stream not found");
+
+    for (const track of this.localStream.getTracks()) {
+      await this.publishTrack(track, { kind: track.kind });
+    }
+  }
+
+  async createRecvTransport() {
+    return new Promise((resolve, reject) => {
+      this.socket!.emit(
+        "connectWebRtcTransport",
+        (response: { params?: any; error?: string }) => {
+          if (response.error) {
+            console.error("Error creating WebRTC transport:", response.error);
+            return reject(new Error(response.error));
+          }
+
+          try {
+            this.recvTransport = this.device!.createRecvTransport(
+              response.params
+            );
+
+            this.recvTransport.on(
+              "connect",
+              async ({ dtlsParameters }, callback, errCallback) => {
+                this.socket!.emit(
+                  "connectTransport",
+                  {
+                    transportId: this.recvTransport!.id,
+                    dtlsParameters,
+                  },
+                  () => {
+                    callback();
+                  }
+                );
+              }
+            );
+
+            resolve(this.recvTransport);
+          } catch (error) {}
+        }
+      );
+    });
+  }
+
+  //close a specific consumer
+
+  async getLocalStream() {
     try {
       this.localStream = await navigator.mediaDevices.getUserMedia({
         audio: true,

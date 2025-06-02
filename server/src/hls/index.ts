@@ -14,8 +14,6 @@ export function initializeHLsServer() {
 
   nms.run();
 
-  console.log("Brio");
-
   nms.on("prePublish", (id, StreamPath, args) => {
     // console.log("[NodeMediaServer] Stream Started", StreamPath);
 

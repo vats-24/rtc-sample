@@ -122,7 +122,16 @@ app.use("/stream", express.static("./media"));
             rtpCapabilities,
           });
 
-          callback({ id: consumer.id });
+          room.addConsumer(socket.id, consumer);
+
+          callback({
+            params: {
+              id: consumer.id,
+              producerId: consumer.producerId,
+              kind: consumer.kind,
+              rtpCapabilities: consumer.rtpParameters,
+            },
+          });
         } catch (error) {}
       }
     );
