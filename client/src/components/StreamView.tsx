@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import WebRTCService from "../services/webrtcService";
-import webrtcService from "../services/webrtcService";
 
 export const Stream = () => {
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -13,7 +12,7 @@ export const Stream = () => {
   useEffect(() => {
     const connect = async () => {
       try {
-        await WebRTCService.connect();
+        await WebRTCService.joinRoom();
         setIsConnected(true);
       } catch (error) {
         console.error("Error connecting to server:", error);
@@ -22,9 +21,8 @@ export const Stream = () => {
 
     connect();
 
-    webrtcService.onRemoteTrack = (track, stream, peerId, kind) => {
+    WebRTCService.onRemoteTrack = (track, stream, peerId, kind) => {
       let remoteStream = remoteStreams.current.get(peerId);
-
       if (!remoteStream) {
         remoteStream = new MediaStream();
         remoteStreams.current.set(peerId, remoteStream);
@@ -45,24 +43,35 @@ export const Stream = () => {
   const togglePlay = async () => {
     if (cameraOn) {
       setCameraOn(false);
+      if (localVideoRef?.current?.srcObject) {
+        const tracks = (
+          localVideoRef.current.srcObject as MediaStream
+        ).getTracks();
+        tracks.forEach((track) => track.stop());
+        localVideoRef.current.srcObject = null;
+      }
     } else {
+      await WebRTCService.publishLocalStream();
       const stream = await WebRTCService.getLocalStream();
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
       }
+      setCameraOn(true);
     }
   };
 
-  const watchUserMedia = async () => {
-    WebRTCService.onRemoteTrack = (track, stream, peerId, kind) => {
-      console.log(stream);
-      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = stream;
-    };
-  };
+  // const watchUserMedia = async () => {
+  //   console.log("first");
+  //   WebRTCService.onRemoteTrack = (track, stream, peerId, kind) => {
+  //     console.log(stream);
+  //     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = stream;
+  //   };
+  // };
+
   return (
     <div className="flex flex-col items-center gap-3 justify-center h-screen bg-white">
       <h1 className="text-3xl font-bold">Stream</h1>
-      <div className="flex flex-row gap-2">
+      <div className="flex flex-col gap-2">
         <video ref={localVideoRef} autoPlay className="bg-amber-300"></video>
         <video ref={remoteVideoRef} autoPlay className="bg-amber-200"></video>
       </div>
@@ -72,12 +81,6 @@ export const Stream = () => {
       >
         Play
       </button>
-      {/* <button
-        onClick={() => watchUserMedia()}
-        className="bg-blue-700 p-2 px-3 rounded-md"
-      >
-        Watch Peer
-      </button> */}
     </div>
   );
 };

@@ -4,6 +4,7 @@ import { Server, Socket } from "socket.io";
 import { createWebRtcTransport, initializeMediaSoup } from "./mediasoup";
 import { initializeHLsServer } from "./hls";
 import { Room } from "./mediasoup/room";
+import { resolve } from "path";
 const app = express();
 
 app.use(express.json());
@@ -33,6 +34,31 @@ app.use("/stream", express.static("./media"));
     } catch (error) {
       console.error("Error adding peer to room:", error);
     }
+
+    socket.on("getExistingProducers", async (callback) => {
+      const producersList: {
+        producerId: string;
+        producerPeerId: string;
+        kind: "audio" | "video";
+      }[] = [];
+      try {
+        for (const [otherPeerId, peer] of room.peers.entries()) {
+          if (otherPeerId === socket.id) continue;
+
+          for (const [producerId, producer] of peer.producers.entries()) {
+            producersList.push({
+              producerId,
+              producerPeerId: otherPeerId,
+              kind: producer.kind,
+            });
+          }
+
+          console.log(producersList);
+
+          callback({ producer: producersList });
+        }
+      } catch (error) {}
+    });
 
     socket.on("getRouterRtpCapabilities", async (callback) => {
       try {

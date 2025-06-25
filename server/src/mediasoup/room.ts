@@ -9,7 +9,7 @@ interface Peer {
 }
 
 export class Room {
-  private peers: Map<string, Peer> = new Map();
+  peers: Map<string, Peer> = new Map();
   private router: Router;
 
   constructor(router: Router) {

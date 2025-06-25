@@ -30,6 +30,35 @@ class WebRTCService {
       ) => void)
     | null = null;
 
+  async joinRoom(): Promise<void> {
+    await this.connect();
+    await this.createRecvTransport();
+    await this.createSendTransport();
+    await this.getLocalStream();
+
+    console.log("Hurrah");
+
+    const existingProducers = await this.getExistingProducers();
+
+    console.log(existingProducers);
+
+    existingProducers?.forEach((producer) => {
+      this.subscribeToProducer(
+        producer.producerId,
+        producer.producerPeerId,
+        producer.kind
+      );
+    });
+  }
+
+  async getExistingProducers() {
+    return new Promise((resolve, reject) => {
+      this.socket?.emit("getExistingProducers", (res: any) => {
+        resolve(res.producers);
+      });
+    });
+  }
+
   async connect(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       this.socket = io("http://localhost:3000");
@@ -38,7 +67,8 @@ class WebRTCService {
         console.log("Connected to signalling server");
         try {
           await this._initializeMediasoupDevice();
-          await this._setupSocketEventListeners();
+          this._setupSocketEventListeners();
+
           resolve();
         } catch (error) {
           console.error("Initialization error:", error);
@@ -86,7 +116,7 @@ class WebRTCService {
 
           console.log(
             "Received router RTP capabilities:",
-            routerRtpCapabilities.routerRtpCapabilities
+            routerRtpCapabilities
           );
 
           try {
@@ -111,7 +141,6 @@ class WebRTCService {
 
   private _setupSocketEventListeners(): void {
     if (!this.socket) return;
-
     this.socket.on(
       "newProducer",
       async (data: {
@@ -120,7 +149,6 @@ class WebRTCService {
         kind: "audio" | "video";
       }) => {
         const { producerId, producerPeerId, kind } = data;
-
         if (producerId === this.socket?.id) {
           console.log("Ignoring producer event from self");
           return;
@@ -134,6 +162,8 @@ class WebRTCService {
         await this.subscribeToProducer(producerId, producerPeerId, kind);
       }
     );
+
+    this.socket.on("existingProducer", () => {});
 
     //peer-disconnected
 
@@ -251,7 +281,7 @@ class WebRTCService {
   }
 
   async createRecvTransport() {
-    console.log("first");
+    console.log("Receiuveed called");
     return new Promise((resolve, reject) => {
       this.socket!.emit(
         "createWebRtcTransport",
@@ -261,14 +291,10 @@ class WebRTCService {
             return reject(new Error(response.error));
           }
 
-          console.log(response);
-
           try {
             this.recvTransport = this.device!.createRecvTransport(
               response.params
             );
-
-            console.log(this.recvTransport);
 
             this.recvTransport.on(
               "connect",
