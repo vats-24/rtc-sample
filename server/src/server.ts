@@ -52,11 +52,9 @@ app.use("/stream", express.static("./media"));
               kind: producer.kind,
             });
           }
-
-          console.log(producersList);
-
-          callback({ producer: producersList });
         }
+
+        callback({ producers: producersList });
       } catch (error) {}
     });
 

@@ -34,13 +34,10 @@ class WebRTCService {
     await this.connect();
     await this.createRecvTransport();
     await this.createSendTransport();
+    // await this.publishLocalStream();
     await this.getLocalStream();
 
-    console.log("Hurrah");
-
     const existingProducers = await this.getExistingProducers();
-
-    console.log(existingProducers);
 
     existingProducers?.forEach((producer) => {
       this.subscribeToProducer(
@@ -54,7 +51,7 @@ class WebRTCService {
   async getExistingProducers() {
     return new Promise((resolve, reject) => {
       this.socket?.emit("getExistingProducers", (res: any) => {
-        resolve(res.producers);
+        resolve(res.producers || []);
       });
     });
   }
