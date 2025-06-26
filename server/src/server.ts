@@ -42,6 +42,13 @@ app.use("/stream", express.static("./media"));
         kind: "audio" | "video";
       }[] = [];
       try {
+        if (!room || !room.peers) {
+          console.error("Room or peers not initialized");
+          return callback({
+            producers: [],
+            error: "Server error room is not ready",
+          });
+        }
         for (const [otherPeerId, peer] of room.peers.entries()) {
           if (otherPeerId === socket.id) continue;
 
@@ -55,7 +62,16 @@ app.use("/stream", express.static("./media"));
         }
 
         callback({ producers: producersList });
-      } catch (error) {}
+      } catch (error: any) {
+        console.error(
+          `[Socket ${socket.id}] Error in getExistingProducers:`,
+          error
+        );
+        callback({
+          producers: [],
+          error: error.message || "Failed to get existing producers",
+        });
+      }
     });
 
     socket.on("getRouterRtpCapabilities", async (callback) => {
@@ -166,7 +182,12 @@ app.use("/stream", express.static("./media"));
               rtpParameters: consumer.rtpParameters,
             },
           });
-        } catch (error) {}
+        } catch (error: any) {
+          console.error(`[Socket ${socket.id}] Error in consume:`, error);
+          callback({
+            error: error.message,
+          });
+        }
       }
     );
 

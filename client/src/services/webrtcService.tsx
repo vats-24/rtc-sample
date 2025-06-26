@@ -30,6 +30,10 @@ class WebRTCService {
       ) => void)
     | null = null;
 
+  public onRemoteTrackEnded:
+    | ((peerId: string, kind: "audio" | "video", trackId: string) => void)
+    | null = null;
+
   async joinRoom(): Promise<void> {
     await this.connect();
     await this.createRecvTransport();
@@ -358,6 +362,11 @@ class WebRTCService {
 
             consumer?.on("transportclose", () => {
               console.log(`Consumer ${consumer.id} transport closed.`);
+              this.consumers.delete(consumer.id);
+            });
+
+            consumer?.on("trackended", () => {
+              console.log(`Consumer ${consumer.id} track ended.`);
               this.consumers.delete(consumer.id);
             });
             const { track } = consumer;
