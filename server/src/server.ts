@@ -53,11 +53,13 @@ app.use("/stream", express.static("./media"));
           if (otherPeerId === socket.id) continue;
 
           for (const [producerId, producer] of peer.producers.entries()) {
-            producersList.push({
-              producerId,
-              producerPeerId: otherPeerId,
-              kind: producer.kind,
-            });
+            if (!producer.closed) {
+              producersList.push({
+                producerId,
+                producerPeerId: otherPeerId,
+                kind: producer.kind,
+              });
+            }
           }
         }
 

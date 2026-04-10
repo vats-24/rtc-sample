@@ -1,11 +1,16 @@
-import type { Producer, Router, Transport } from "mediasoup/node/lib/types";
+import type {
+  Consumer,
+  Producer,
+  Router,
+  Transport,
+} from "mediasoup/node/lib/types";
 
 interface Peer {
   id: string;
   name?: string;
   transport: Map<string, Transport>;
   producers: Map<string, Producer>;
-  consumers: Map<string, Producer>;
+  consumers: Map<string, Consumer>;
 }
 
 export class Room {
@@ -70,7 +75,9 @@ export class Room {
       throw new Error(`Peer with id ${peerId} does not exist`);
     }
 
-    peer.transport.forEach((transport) => transport.close());
+    peer.producers.forEach((p) => p.close());
+    peer.consumers.forEach((c) => c.close());
+    peer.transport.forEach((t) => t.close());
 
     this.peers.delete(peerId);
   }

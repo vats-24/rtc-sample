@@ -9,6 +9,8 @@ if (!fs.existsSync(media)) {
   fs.mkdirSync(media, { recursive: true });
 }
 
+const ffmpegProcesses = new Map<string, ChildProcess>();
+
 export function initializeHLsServer() {
   const nms = new NodeMediaServer(hlsConfig);
 
@@ -42,6 +44,8 @@ export function initializeHLsServer() {
       path.join(hlsOutputPath, "index.m3u8"),
     ]);
 
+    ffmpegProcesses.set(id, ffmpeg);
+
     ffmpeg.stdout.on("data", (data) => {
       console.log(`FFmpeg stdout: ${data}`);
     });
@@ -50,9 +54,18 @@ export function initializeHLsServer() {
       console.log(`FFmpeg stderr: ${data}`);
     });
 
-    ffmpeg.on("close", (code) => {
-      console.log(`FFmpeg process exited with code ${code}`);
+    ffmpeg.on("close", () => {
+      ffmpegProcesses.delete(id);
     });
+  });
+
+  nms.on("donePublish", (id, StreamPath, args) => {
+    const ffmpeg = ffmpegProcesses.get(id);
+    if (ffmpeg) {
+      ffmpeg.kill();
+      ffmpegProcesses.delete(id);
+      console.log(`FFmpeg process for ${id} terminated.`);
+    }
   });
 
   return nms;
