@@ -1,14 +1,3 @@
-/*build a webrtc service class 
-
-first declare the necessary variables
-connect asynchronously to the server
-
-build function to get user media using browser apis and write the object configs
-return this.localStream
-
-
-*/
-
 import { io, Socket } from "socket.io-client";
 import * as mediasoupClient from "mediasoup-client";
 
@@ -36,12 +25,13 @@ class WebRTCService {
 
   async joinRoom(): Promise<void> {
     await this.connect();
-    await this.createRecvTransport();
-    await this.createSendTransport();
-    // await this.publishLocalStream();
     await this.getLocalStream();
+    if (!this.recvTransport) await this.createRecvTransport();
+    if (!this.sendTransport) await this.createSendTransport();
+    // await this.publishLocalStream();
 
-    const existingProducers = await this.getExistingProducers();
+    //@ts-ignore
+    const existingProducers = (await this.getExistingProducers()) as any[];
 
     existingProducers?.forEach((producer) => {
       this.subscribeToProducer(
@@ -61,6 +51,8 @@ class WebRTCService {
   }
 
   async connect(): Promise<void> {
+    if (this.socket?.connected) return;
+
     return new Promise<void>((resolve, reject) => {
       this.socket = io("http://localhost:3000");
 
@@ -150,7 +142,7 @@ class WebRTCService {
         kind: "audio" | "video";
       }) => {
         const { producerId, producerPeerId, kind } = data;
-        if (producerId === this.socket?.id) {
+        if (producerPeerId === this.socket?.id) {
           console.log("Ignoring producer event from self");
           return;
         }
@@ -354,6 +346,14 @@ class WebRTCService {
               rtpParameters: res.params.rtpParameters,
             });
 
+            await new Promise((resolve) => {
+              this.socket!.emit(
+                "resumeConsumer",
+                { consumerId: consumer.id },
+                resolve
+              );
+            });
+
             this.consumers.set(consumer.id, consumer);
             console.log(
               `Consuming ${kind} - Consumer ID: ${consumer.id}, Producer ID: ${producerId}, AppData:`,
@@ -371,7 +371,12 @@ class WebRTCService {
             });
             const { track } = consumer;
             const remoteStream = new MediaStream([track]); // Create a stream for this track
-            this.onRemoteTrack?.(track, remoteStream, producerPeerId, kind);
+            this.onRemoteTrack?.(
+              track,
+              new MediaStream(),
+              producerPeerId,
+              kind
+            );
 
             resolve(consumer);
           } catch (error) {

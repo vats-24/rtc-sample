@@ -13,11 +13,14 @@
   "description": "",
   "devDependencies": {
     "@types/node-media-server": "^2.3.7",
+    "@types/puppeteer": "^5.4.7",
     "typescript": "^5.8.3"
   },
   "dependencies": {
     "mediasoup": "^3.15.8",
     "node-media-server": "^4.0.17",
-    "socket.io": "^4.8.1"
+    "puppeteer-stream": "^3.0.22",
+    "socket.io": "^4.8.1",
+    "ts-node-dev": "^2.0.0"
   }
 }

@@ -5,11 +5,12 @@ import { createWebRtcTransport, initializeMediaSoup } from "./mediasoup";
 import { initializeHLsServer } from "./hls";
 import { Room } from "./mediasoup/room";
 import { resolve } from "path";
+import { startEgress } from "./egress";
 const app = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
+let isEgressRunning = false;
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -150,6 +151,18 @@ app.use("/stream", express.static("./media"));
             kind,
           });
 
+          if (!isEgressRunning && kind === "video") {
+            isEgressRunning = true;
+            console.log(
+              "🎥 First video stream detected! Auto-starting HLS Bridge..."
+            );
+
+            startEgress("room1", "room1").catch((err) => {
+              console.error("Failed to start Egress bot:", err);
+              isEgressRunning = false;
+            });
+          }
+
           callback({ id: producer.id });
         } catch (error: any) {
           console.error("Error producing:", error);
@@ -164,14 +177,13 @@ app.use("/stream", express.static("./media"));
         try {
           const peer = room.getPeer(socket.id);
           const transport = peer.transport.get(transportId);
-
-          if (!transport) {
+          if (!transport)
             throw new Error(`Transport with ID ${transportId} not found`);
-          }
 
           const consumer = await transport.consume({
             producerId,
             rtpCapabilities,
+            paused: true,
           });
 
           room.addConsumer(socket.id, consumer);
@@ -186,12 +198,27 @@ app.use("/stream", express.static("./media"));
           });
         } catch (error: any) {
           console.error(`[Socket ${socket.id}] Error in consume:`, error);
-          callback({
-            error: error.message,
-          });
+          callback({ error: error.message });
         }
       }
     );
+
+    socket.on("resumeConsumer", async ({ consumerId }, callback = () => {}) => {
+      try {
+        const peer = room.getPeer(socket.id);
+        const consumer = peer.consumers.get(consumerId);
+
+        if (!consumer) {
+          throw new Error(`Consumer with ID ${consumerId} not found`);
+        }
+
+        await consumer.resume();
+        callback({ success: true });
+      } catch (error: any) {
+        console.error("Error resuming consumer:", error);
+        callback({ error: error.message });
+      }
+    });
 
     socket.on("disconnect", () => {
       console.log("Client disconnected:", socket.id);

@@ -17,8 +17,6 @@ export function initializeHLsServer() {
   nms.run();
 
   nms.on("prePublish", (id, StreamPath, args) => {
-    // console.log("[NodeMediaServer] Stream Started", StreamPath);
-
     const streamKey = StreamPath.split("/")[2];
     const hlsOutputPath = path.join(media, streamKey);
 
