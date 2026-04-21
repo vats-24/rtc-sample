@@ -1,4 +1,4 @@
-markdown_content = """# Interactive Broadcast System: WebRTC SFU to HLS Bridge
+## Interactive Broadcast System: WebRTC SFU to HLS Bridge
 
 A highly scalable, hybrid media streaming architecture that bridges sub-500ms low-latency communication (WebRTC) with massively scalable audience broadcasting (HLS).
 
