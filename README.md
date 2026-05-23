@@ -1,5 +1,3 @@
-markdown_content = """# Interactive Broadcast System: WebRTC SFU to HLS Bridge
-
 A highly scalable, hybrid media streaming architecture that bridges sub-500ms low-latency communication (WebRTC) with massively scalable audience broadcasting (HLS).
 
 This project demonstrates a decoupled backend architecture where a Selective Forwarding Unit (SFU) handles real-time peer-to-peer streams, and a headless egress compositor dynamically translates the room's visual state into a standard HTTP Live Streaming (HLS) feed.

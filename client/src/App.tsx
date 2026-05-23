@@ -12,6 +12,9 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("view") === "egress") {
       setCurrentView("egress");
+
+      const targetRoom = params.get("room");
+      if (targetRoom) setRoomId(targetRoom);
     }
   }, []);
   const [roomId, setRoomId] = useState("room1");

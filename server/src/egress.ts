@@ -8,12 +8,13 @@ export async function startEgress(roomId: string, streamKey: string) {
     const browser = await launch({
       executablePath: "/usr/bin/google-chrome",
       defaultViewport: { width: 1280, height: 720 },
+      headless: false,
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--use-fake-ui-for-media-stream",
-        "--allow-http-screen-capture", // 👈 important
-        "--auto-select-desktop-capture-source=puppeteer-stream", // 👈 key
+        "--allow-http-screen-capture",
+        "--auto-select-desktop-capture-source=puppeteer-stream",
         "--enable-usermedia-screen-capturing",
       ],
     });
@@ -49,6 +50,10 @@ export async function startEgress(roomId: string, streamKey: string) {
     ]);
 
     stream.pipe(ffmpeg.stdin);
+
+    ffmpeg.on("error", (err) => {
+      console.error("[Egress FFmpeg Process Error]:", err);
+    });
 
     ffmpeg.stderr.on("data", (data) => {
       console.log(`[FFmpeg] ${data.toString()}`);

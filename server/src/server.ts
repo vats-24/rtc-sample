@@ -4,12 +4,27 @@ import { Server, Socket } from "socket.io";
 import { createWebRtcTransport, initializeMediaSoup } from "./mediasoup";
 import { initializeHLsServer } from "./hls";
 import { Room } from "./mediasoup/room";
-import { resolve } from "path";
+import path, { resolve } from "path";
 import { startEgress } from "./egress";
 const app = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+const mediaPath = path.join(process.cwd(), "media");
+app.use("/stream", express.static(mediaPath));
+console.log(`📂 Serving static HLS streams from: ${mediaPath}`);
+
 let isEgressRunning = false;
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -17,6 +32,28 @@ const io = new Server(server, {
     origin: "*",
     methods: ["GET", "POST"],
   },
+});
+
+const activeEgressRooms = new Set<string>();
+
+app.post("/api/watch", (req, res) => {
+  const { roomId } = req.body;
+  if (!roomId) return res.status(400).json({ error: "Missing roomId" });
+
+  // Only start the bot if it isn't already running for this room
+  if (!activeEgressRooms.has(roomId)) {
+    activeEgressRooms.add(roomId);
+    console.log(
+      `[API] On-demand watcher joined. Starting Egress Bot for room: ${roomId}`
+    );
+
+    startEgress(roomId, roomId).catch((err) => {
+      console.error("Failed to start Egress bot:", err);
+      activeEgressRooms.delete(roomId); // Free the lock if it fails
+    });
+  }
+
+  res.json({ message: "Egress running" });
 });
 
 app.use("/stream", express.static("./media"));
@@ -151,17 +188,17 @@ app.use("/stream", express.static("./media"));
             kind,
           });
 
-          if (!isEgressRunning && kind === "video") {
-            isEgressRunning = true;
-            console.log(
-              "🎥 First video stream detected! Auto-starting HLS Bridge..."
-            );
+          // const currentRoomId = "room1";
 
-            startEgress("room1", "room1").catch((err) => {
-              console.error("Failed to start Egress bot:", err);
-              isEgressRunning = false;
-            });
-          }
+          // if (!isEgressRunning && kind === "video") {
+          //   isEgressRunning = true;
+          //   console.log(`🎥 Launching Egress Bot for room: ${currentRoomId}`);
+
+          //   startEgress(currentRoomId, currentRoomId).catch((err) => {
+          //     console.error("Failed to start Egress bot:", err);
+          //     isEgressRunning = false;
+          //   });
+          // }
 
           callback({ id: producer.id });
         } catch (error: any) {
@@ -217,6 +254,22 @@ app.use("/stream", express.static("./media"));
       } catch (error: any) {
         console.error("Error resuming consumer:", error);
         callback({ error: error.message });
+      }
+    });
+
+    socket.on("closeProducer", ({ producerId }) => {
+      try {
+        const peer = room.getPeer(socket.id);
+        const producer = peer.producers.get(producerId);
+
+        if (producer) {
+          producer.close();
+          peer.producers.delete(producerId);
+
+          socket.broadcast.emit("producerClosed", { producerId });
+        }
+      } catch (error) {
+        console.error("Error closing producer:", error);
       }
     });
 

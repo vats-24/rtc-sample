@@ -17,6 +17,10 @@ export function initializeHLsServer() {
   nms.run();
 
   nms.on("prePublish", (id, StreamPath, args) => {
+    console.log(
+      `[NMS] prePublish triggered for stream: ${StreamPath} (ID: ${id})`
+    );
+
     const streamKey = StreamPath.split("/")[2];
     const hlsOutputPath = path.join(media, streamKey);
 
@@ -41,6 +45,10 @@ export function initializeHLsServer() {
       "hls",
       path.join(hlsOutputPath, "index.m3u8"),
     ]);
+
+    ffmpeg.on("error", (err) => {
+      console.error("[HLS Transcoder FFmpeg Error]:", err);
+    });
 
     ffmpegProcesses.set(id, ffmpeg);
 

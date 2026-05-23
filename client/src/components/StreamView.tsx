@@ -21,20 +21,54 @@ export const Stream = ({ isBot = false }: StreamProps) => {
       } catch (error) {
         console.error("Failed to join room:", error);
       }
+
+      WebRTCService.onPeerDisconnected = (peerId) => {
+        console.log(`Removing peer ${peerId} from view`);
+
+        const stream = remoteStreams.current.get(peerId);
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+          remoteStreams.current.delete(peerId);
+        }
+
+        setRemotePeers((prev) => prev.filter((id) => id !== peerId));
+      };
+
+      WebRTCService.onRemoteTrackEnded = (peerId, kind, trackId) => {
+        console.log(`${kind} track ended for peer ${peerId}`);
+
+        const existingStream = remoteStreams.current.get(peerId);
+        if (existingStream) {
+          const track = existingStream
+            .getTracks()
+            .find((t) => t.id === trackId || t.kind === kind);
+          if (track) {
+            track.stop();
+            existingStream.removeTrack(track);
+
+            const updatedStream = new MediaStream(existingStream.getTracks());
+            remoteStreams.current.set(peerId, updatedStream);
+
+            setRemotePeers((prev) => [...prev]);
+          }
+        }
+      };
     };
 
-    WebRTCService.onRemoteTrack = (track, stream, peerId) => {
+    WebRTCService.onRemoteTrack = (track, _, peerId) => {
       console.log(`Receiving ${track.kind} track from ${peerId}`);
 
-      let remoteStream = remoteStreams.current.get(peerId);
+      const existingStream =
+        remoteStreams.current.get(peerId) || new MediaStream();
+      existingStream.addTrack(track);
 
-      if (!remoteStream) {
-        remoteStream = new MediaStream();
-        remoteStreams.current.set(peerId, remoteStream);
-        setRemotePeers((prev) => [...new Set([...prev, peerId])]);
-      }
+      const updatedStream = new MediaStream(existingStream.getTracks());
+      remoteStreams.current.set(peerId, updatedStream);
 
-      remoteStream.addTrack(track);
+      setRemotePeers((prev) => {
+        if (!prev.includes(peerId)) return [...prev, peerId];
+        return [...prev];
+      });
     };
 
     initRTC();
@@ -46,16 +80,19 @@ export const Stream = ({ isBot = false }: StreamProps) => {
 
   const handleToggleCamera = async () => {
     if (cameraOn) {
-      const stream = localVideoRef.current?.srcObject as MediaStream;
-      stream?.getTracks().forEach((track) => track.stop());
+      await WebRTCService.unpublishLocalStream();
       if (localVideoRef.current) localVideoRef.current.srcObject = null;
       setCameraOn(false);
     } else {
       try {
         await WebRTCService.publishLocalStream();
-        const stream = await WebRTCService.getLocalStream();
-        if (localVideoRef.current) {
+        const stream = WebRTCService.localStream;
+        if (localVideoRef.current && stream) {
           localVideoRef.current.srcObject = stream;
+
+          localVideoRef.current
+            .play()
+            .catch((e) => console.error("Play error:", e));
         }
         setCameraOn(true);
       } catch (err) {
@@ -121,7 +158,15 @@ const RemoteVideoSlot = ({
 
   useEffect(() => {
     if (videoRef.current) {
-      videoRef.current.srcObject = stream;
+      videoRef.current.srcObject = null;
+
+      if (stream.getTracks().length > 0) {
+        videoRef.current.srcObject = stream;
+
+        videoRef.current
+          .play()
+          .catch((e) => console.log("Remote play error:", e));
+      }
     }
   }, [stream]);
 

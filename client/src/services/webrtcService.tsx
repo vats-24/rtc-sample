@@ -23,9 +23,11 @@ class WebRTCService {
     | ((peerId: string, kind: "audio" | "video", trackId: string) => void)
     | null = null;
 
+  public onPeerDisconnected: ((peerId: string) => void) | null = null;
+
   async joinRoom(): Promise<void> {
     await this.connect();
-    await this.getLocalStream();
+    // await this.getLocalStream();
     if (!this.recvTransport) await this.createRecvTransport();
     if (!this.sendTransport) await this.createSendTransport();
     // await this.publishLocalStream();
@@ -158,9 +160,37 @@ class WebRTCService {
 
     this.socket.on("existingProducer", () => {});
 
-    //peer-disconnected
+    this.socket.on("peerDisconnected", (data: { peerId: string }) => {
+      console.log(`Peer disconnected: ${data.peerId}`);
 
-    //consumer-closed
+      for (const [id, consumer] of this.consumers.entries()) {
+        if (consumer.appData.peerId === data.peerId) {
+          consumer.close();
+          this.consumers.delete(id);
+        }
+      }
+      this.onPeerDisconnected?.(data.peerId);
+    });
+
+    this.socket.on(
+      "producerClosed",
+      ({ producerId }: { producerId: string }) => {
+        console.log(`Remote producer closed: ${producerId}`);
+
+        for (const [consumerId, consumer] of this.consumers.entries()) {
+          if (consumer.producerId === producerId) {
+            consumer.close();
+            this.consumers.delete(consumerId);
+
+            this.onRemoteTrackEnded?.(
+              consumer.appData.peerId as string,
+              consumer.kind as "audio" | "video",
+              consumer.track.id
+            );
+          }
+        }
+      }
+    );
   }
 
   async createSendTransport() {
@@ -273,6 +303,24 @@ class WebRTCService {
     }
   }
 
+  async unpublishLocalStream() {
+    if (this.localStream) {
+      this.localStream.getTracks().forEach((track) => track.stop());
+      this.localStream = null;
+    }
+
+    for (const [producerId, producer] of this.producers.entries()) {
+      producer.close();
+      this.socket?.emit("closeProducer", { producerId });
+    }
+    this.producers.clear();
+
+    if (this.sendTransport) {
+      this.sendTransport.close();
+      this.sendTransport = null;
+    }
+  }
+
   async createRecvTransport() {
     console.log("Receiuveed called");
     return new Promise((resolve, reject) => {
@@ -314,7 +362,6 @@ class WebRTCService {
     });
   }
 
-  //look in for appData here neither sent nor received
   async subscribeToProducer(
     producerId: string,
     producerPeerId: string,
@@ -344,6 +391,7 @@ class WebRTCService {
               producerId: res.params.producerId,
               kind: res.params.kind,
               rtpParameters: res.params.rtpParameters,
+              appData,
             });
 
             await new Promise((resolve) => {
@@ -370,13 +418,8 @@ class WebRTCService {
               this.consumers.delete(consumer.id);
             });
             const { track } = consumer;
-            const remoteStream = new MediaStream([track]); // Create a stream for this track
-            this.onRemoteTrack?.(
-              track,
-              new MediaStream(),
-              producerPeerId,
-              kind
-            );
+            const remoteStream = new MediaStream([track]);
+            this.onRemoteTrack?.(track, remoteStream, producerPeerId, kind);
 
             resolve(consumer);
           } catch (error) {
